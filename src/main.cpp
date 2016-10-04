@@ -3,7 +3,6 @@
 
 #include <mcp_can.h>
 #include <SPI.h>
-//#include <Servo.h>
 #include <LiquidCrystal.h>
 
 long unsigned int rxId;
@@ -18,8 +17,7 @@ LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 
 byte data[8] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
-//Servo myservo;  // create servo object to control a servo
-//int newAngle = 0;
+long timeLastMsgSend = 0;
 
 void setup() {
 
@@ -48,11 +46,7 @@ void setup() {
 
   Serial.println("MCP2515 Library Receive Example...");
 
-  //myservo.attach(9);
-
 }
-
-
 
 void loop() {
 
@@ -85,21 +79,26 @@ void loop() {
         }
       }
 
-      if (!digitalRead(8)) { //
 
-        // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
-        byte sndStat = CAN0.sendMsgBuf(0x100, 0, 8, data);
+  if (!digitalRead(8) && millis() - timeLastMsgSend > 2000)
+  {
+    // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
+    byte sndStat = CAN0.sendMsgBuf(0x100, 0, 8, data);
 
-        if(sndStat == CAN_OK){
-          Serial.print("Message Sent Successfully!  ");
-          Serial.println(data[0]);
-        } else {
-          Serial.println("Error Sending Message...");
-        }
-
-        delay(1000);
-      }
+    if(sndStat == CAN_OK)
+    {
+      Serial.print("Message Sent Successfully!  ");
+      Serial.println(data[0]);
     }
+    else
+    {
+      Serial.println("Error Sending Message...");
+    }
+    data[0]++;
+    if (data[0] == 11) data[0] = 0;
+    timeLastMsgSend = millis();
+  }
+}
 
 
     /*********************************************************************************************************
