@@ -131,13 +131,13 @@ int sendMessage(byte channel, byte state) {
 
   if(sndStat == CAN_OK)
   {
-    Serial.print("Message Sent Successfully!  ");
+    Serial.print("Feedback-Message Sent Successfully!  ");
     Serial.println(channel);
     return 0;
   }
   else
   {
-    Serial.println("Error Sending Message...");
+    Serial.println("Error Sending Feedback-Message...");
     return -1;
   }
 }
@@ -146,19 +146,34 @@ void handle_turnout_switched ()
 {
   detachInterrupt(INTused);//protect from further interrupts
   uint8_t register_value = 0;
-  delay (100);  // de-bounce before we re-enable interrupts
-  if (mcp.gpioRegisterReadByte(mcp.INTF)){
-    register_value |= mcp.gpioRegisterReadByte(mcp.INTCAP);
-    for (byte pin = 0; pin < 8; pin++)
+  uint8_t gpio_value = 0;
+  delay (250);  // de-bounce before we re-enable interrupts
+  register_value |= mcp.gpioRegisterReadByte(mcp.INTF);
+  gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
+
+  for (byte pin = 0; pin < 3; pin++)
+  {
+    // which pin was LOW?
+    if ((register_value & (1 << 2*pin)) || (register_value & (1 << (2*pin+1))))
     {
-      // which pin was LOW?
-      if (register_value & (1 << pin))
+      Serial.print("Turnout ");
+      Serial.print((pin), DEC);
+      Serial.print(" now switched");
+      if ((gpio_value & (1 << 2*pin)) || (gpio_value & (0 << (2*pin+1))))
       {
-        Serial.print ("Turnout ");
-        Serial.print ((pin/2), DEC);
-        Serial.println (" now switched to ");
-        sendMessage(pin/2, pin%2);
-      }  // end of if this bit changed
+        Serial.println(" to LEFT\n");
+        sendMessage(pin, 0);
+        mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
+        return;
+      }
+      if ((gpio_value & (0 << 2*pin)) || (gpio_value & (1 << (2*pin+1))))
+      {
+        Serial.println(" to RIGHT\n");
+        sendMessage(pin, 1);
+        mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
+        return;
+      }
+      Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
     }
   }
   turnout_switched = false;
@@ -185,12 +200,11 @@ void setup()
   // Configuring GPIO MCP23S08
   mcp.begin();
   mcp.gpioRegisterWriteByte(mcp.IOCON,0b00101000);//set interrupt on GPIO and other parameters (see datasheet)
-  mcp.gpioPinMode(INPUT);// Set all pins to be inputs
-  mcp.gpioRegisterWriteByte(mcp.GPPU,0xFF);// pull-up resistor for switch
+  mcp.gpioPinMode(0xFF);// Set all pins to be inputs
+  mcp.gpioRegisterWriteByte(mcp.GPPU, 0x00);// pull-up resistor for switch
   mcp.gpioRegisterWriteByte(mcp.IPOL,0xFF);// invert polarity
   mcp.gpioRegisterWriteByte(mcp.GPINTEN,0xFF);// enable all interrupt
   mcp.gpioRegisterReadByte(mcp.INTCAP);// read from interrupt capture ports to clear them
-
   //now prepare interrupt pin on processor
   pinMode (INTpin, INPUT);
   digitalWrite (INTpin, HIGH);
@@ -199,7 +213,9 @@ void setup()
 
   // Set pins for Weichen
   pinMode(3, OUTPUT);
+  digitalWrite(3, LOW);
   pinMode(4, OUTPUT);
+  digitalWrite(4, LOW);
 }
 
 
