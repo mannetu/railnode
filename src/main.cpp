@@ -25,7 +25,7 @@ unsigned char len = 0;
 unsigned char rxBuf[8];
 char msgString[128];                        // Array to store serial string
 
-#define MCP_CSPIN  5
+#define MCP_CSPIN  8
 #define MCP_ADRS 0x20
 #define INTused 0
 #define INTpin 2
@@ -132,12 +132,12 @@ int sendMessage(byte channel, byte state) {
   if(sndStat == CAN_OK)
   {
     Serial.print("Feedback-Message Sent Successfully!  ");
-    Serial.println(channel);
+    Serial.println(channel); Serial.println();
     return 0;
   }
   else
   {
-    Serial.println("Error Sending Feedback-Message...");
+    Serial.println("Error Sending Feedback-Message..."); Serial.println();
     return -1;
   }
 }
@@ -147,38 +147,50 @@ void handle_turnout_switched ()
   detachInterrupt(INTused);//protect from further interrupts
   uint8_t register_value = 0;
   uint8_t gpio_value = 0;
-  delay (250);  // de-bounce before we re-enable interrupts
+  delay (100);  // de-bounce before we re-enable interrupts
   register_value |= mcp.gpioRegisterReadByte(mcp.INTF);
   gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
-
-  for (byte pin = 0; pin < 3; pin++)
+  if (register_value)
   {
-    // which pin was LOW?
-    if ((register_value & (1 << 2*pin)) || (register_value & (1 << (2*pin+1))))
+    //Serial.print("interupt\n");
+    Serial.println(gpio_value, BIN);
+    // which turnout caused interrupt?
+    uint8_t turnout_ch = 0;
+    if ((register_value & (1 << 0)) || (register_value & (1 << 1))) turnout_ch = 0;
+    if ((register_value & (1 << 2)) || (register_value & (1 << 3))) turnout_ch = 1;
+    if ((register_value & (1 << 4)) || (register_value & (1 << 5))) turnout_ch = 2;
+    if ((register_value & (1 << 6)) || (register_value & (1 << 7))) turnout_ch = 3;
+
+    Serial.print("Turnout ");
+    Serial.print(turnout_ch, DEC);
+    Serial.print(" now switched");
+    if ((gpio_value & (1 << 2*turnout_ch)) || (gpio_value & (0 << (2*turnout_ch+1))))
     {
-      Serial.print("Turnout ");
-      Serial.print((pin), DEC);
-      Serial.print(" now switched");
-      if ((gpio_value & (1 << 2*pin)) || (gpio_value & (0 << (2*pin+1))))
-      {
-        Serial.println(" to LEFT\n");
-        sendMessage(pin, 0);
-        mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
-        return;
+      Serial.println(" to LEFT");
+      sendMessage(turnout_ch, 0);
+      mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
+      turnout_switched = false;
+      attachInterrupt(INTused, turnout_manually_switch, FALLING);
+      return;
       }
-      if ((gpio_value & (0 << 2*pin)) || (gpio_value & (1 << (2*pin+1))))
-      {
-        Serial.println(" to RIGHT\n");
-        sendMessage(pin, 1);
-        mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
-        return;
-      }
-      Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
+
+    if ((gpio_value & (0 << 2*turnout_ch)) || (gpio_value & (1 << (2*turnout_ch+1))))
+    {
+      Serial.println(" to RIGHT");
+      sendMessage(turnout_ch, 1);
+      mcp.gpioRegisterReadByte(mcp.INTCAP);  // clear INTF by readout INTCAP
+      turnout_switched = false;
+      attachInterrupt(INTused, turnout_manually_switch, FALLING);
+      return;
     }
+
+    Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
+    sendMessage(turnout_ch, 0xFF);
   }
   turnout_switched = false;
   attachInterrupt(INTused, turnout_manually_switch, FALLING);
 }
+
 
 
 void setup()
@@ -206,6 +218,7 @@ void setup()
   mcp.gpioRegisterWriteByte(mcp.GPINTEN,0xFF);// enable all interrupt
   mcp.gpioRegisterReadByte(mcp.INTCAP);// read from interrupt capture ports to clear them
   //now prepare interrupt pin on processor
+  Serial.print(mcp.gpioRegisterReadByte(mcp.GPIO));
   pinMode (INTpin, INPUT);
   digitalWrite (INTpin, HIGH);
   turnout_switched = false;
