@@ -131,8 +131,8 @@ int sendMessage(byte channel, byte state) {
 
   if(sndStat == CAN_OK)
   {
-    Serial.print("Feedback-Message Sent Successfully!  ");
-    Serial.println(channel); Serial.println();
+    //Serial.print("Feedback-Message Sent!  ");
+    //Serial.println(channel); Serial.println();
     return 0;
   }
   else
@@ -153,7 +153,7 @@ void handle_turnout_switched ()
   if (register_value)
   {
     //Serial.print("interupt\n");
-    Serial.println(gpio_value, BIN);
+    //Serial.println(gpio_value, BIN);
     // which turnout caused interrupt?
     uint8_t turnout_ch = 0;
     if ((register_value & (1 << 0)) || (register_value & (1 << 1))) turnout_ch = 0;
@@ -164,7 +164,7 @@ void handle_turnout_switched ()
     Serial.print("Turnout ");
     Serial.print(turnout_ch, DEC);
     Serial.print(" now switched");
-    if ((gpio_value & (1 << 2*turnout_ch)) || (gpio_value & (0 << (2*turnout_ch+1))))
+    if (gpio_value & (0x1 << (turnout_ch*2)))
     {
       Serial.println(" to LEFT");
       sendMessage(turnout_ch, 0);
@@ -174,7 +174,7 @@ void handle_turnout_switched ()
       return;
       }
 
-    if ((gpio_value & (0 << 2*turnout_ch)) || (gpio_value & (1 << (2*turnout_ch+1))))
+    if (gpio_value & (0x2 << (turnout_ch*2)))
     {
       Serial.println(" to RIGHT");
       sendMessage(turnout_ch, 1);
