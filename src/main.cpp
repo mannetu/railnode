@@ -67,26 +67,33 @@ int isMessage()
   return 0;
 }
 
-int switch_turnouts(int ch, int state) {
+
+int switch_turnouts(int ch, int state) 
+{
   switch (ch)
   {
-    case 0:
-      if (state == 0)
-      {
-        digitalWrite(3, 1);
-        delay(500);
-        digitalWrite(3, 0);
-      }
-      if (state == 1)
-      {
-        digitalWrite(4, 1);
-        delay(500);
-        digitalWrite(4, 0);
-      }
-      return 0;
+  case 0:
+    if (state == 0)
+    {
+      digitalWrite(3, 1);
+      delay(500);
+      digitalWrite(3, 0);
+    }
+    if (state == 1)
+    {
+      digitalWrite(4, 1);
+      delay(500);
+      digitalWrite(4, 0);
+    }
+    if (state == 0xFF)
+    {
+      report_turnout_state(ch);
+    }
+    return 0;
   }
   return -1;
 }
+
 
 int switch_signals(int ch, int state) {
   switch (ch)
@@ -172,7 +179,7 @@ void handle_turnout_switched ()
       turnout_switched = false;
       attachInterrupt(INTused, turnout_manually_switch, FALLING);
       return;
-      }
+    }
 
     if (gpio_value & (0x2 << (turnout_ch*2)))
     {
@@ -191,7 +198,24 @@ void handle_turnout_switched ()
   attachInterrupt(INTused, turnout_manually_switch, FALLING);
 }
 
+int report_turnout_state(int ch)
+{
+  uint8_t gpio_value = 0;
+  gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
+  if (gpio_value & (0x1 << (ch*2)))
+  {
+    sendMessage(ch, 0);
+    return 0;
+  }
 
+  if (gpio_value & (0x2 << (ch*2)))
+  {
+    sendMessage(ch, 1);
+    return 1;
+  }
+  //Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
+  sendMessage(turnout_ch, 0xFF);
+}
 
 void setup()
 {
