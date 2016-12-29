@@ -16,6 +16,7 @@
 #define ADDR_SIGN  0x600 // Signal Set
 
 #define NODE_NUMBER 0
+#define TURNOUT_SWITCH_PULSE 100
 
 
 #define CAN0_INT 9                              // Set INT to pin 9
@@ -68,7 +69,44 @@ int isMessage()
 }
 
 
-int switch_turnouts(int ch, int state) 
+int sendMessage(byte channel, byte state) {
+  // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
+  byte data[1] = {state};
+  byte sndStat = CAN0.sendMsgBuf((ADDR_TUFB + channel), 0, 1, data);
+
+  if(sndStat == CAN_OK)
+  {
+    //Serial.print("Feedback-Message Sent!  ");
+    //Serial.println(channel); Serial.println();
+    return 0;
+  }
+  else
+  {
+    Serial.println("Error Sending Feedback-Message..."); Serial.println();
+    return -1;
+  }
+}
+
+int report_turnout_state(int ch)
+{
+  uint8_t gpio_value = 0;
+  gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
+  if (gpio_value & (0x1 << (ch*2)))
+  {
+    sendMessage(ch, 0);
+    return 0;
+  }
+
+  if (gpio_value & (0x2 << (ch*2)))
+  {
+    sendMessage(ch, 1);
+    return 1;
+  }
+  //Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
+  sendMessage(ch, 0xFF);
+}
+
+int switch_turnouts(int ch, int state)
 {
   switch (ch)
   {
@@ -76,13 +114,13 @@ int switch_turnouts(int ch, int state)
     if (state == 0)
     {
       digitalWrite(3, 1);
-      delay(500);
+      delay(TURNOUT_SWITCH_PULSE);
       digitalWrite(3, 0);
     }
     if (state == 1)
     {
       digitalWrite(4, 1);
-      delay(500);
+      delay(TURNOUT_SWITCH_PULSE);
       digitalWrite(4, 0);
     }
     if (state == 0xFF)
@@ -131,30 +169,13 @@ void turnout_manually_switch ()
   turnout_switched = true;
 }
 
-int sendMessage(byte channel, byte state) {
-  // send data:  ID = 0x100, Standard CAN Frame, Data length = 8 bytes, 'data' = array of data bytes to send
-  byte data[1] = {state};
-  byte sndStat = CAN0.sendMsgBuf((ADDR_TUFB + channel), 0, 1, data);
-
-  if(sndStat == CAN_OK)
-  {
-    //Serial.print("Feedback-Message Sent!  ");
-    //Serial.println(channel); Serial.println();
-    return 0;
-  }
-  else
-  {
-    Serial.println("Error Sending Feedback-Message..."); Serial.println();
-    return -1;
-  }
-}
 
 void handle_turnout_switched ()
 {
   detachInterrupt(INTused);//protect from further interrupts
   uint8_t register_value = 0;
   uint8_t gpio_value = 0;
-  delay (100);  // de-bounce before we re-enable interrupts
+  delay (50);  // de-bounce before we re-enable interrupts
   register_value |= mcp.gpioRegisterReadByte(mcp.INTF);
   gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
   if (register_value)
@@ -198,24 +219,7 @@ void handle_turnout_switched ()
   attachInterrupt(INTused, turnout_manually_switch, FALLING);
 }
 
-int report_turnout_state(int ch)
-{
-  uint8_t gpio_value = 0;
-  gpio_value |= mcp.gpioRegisterReadByte(mcp.GPIO);
-  if (gpio_value & (0x1 << (ch*2)))
-  {
-    sendMessage(ch, 0);
-    return 0;
-  }
 
-  if (gpio_value & (0x2 << (ch*2)))
-  {
-    sendMessage(ch, 1);
-    return 1;
-  }
-  //Serial.print(": Error! GPIOs "); Serial.println(gpio_value, BIN);
-  sendMessage(turnout_ch, 0xFF);
-}
 
 void setup()
 {
