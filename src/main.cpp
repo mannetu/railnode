@@ -128,6 +128,25 @@ int switch_turnouts(int ch, int state)
       report_turnout_state(ch);
     }
     return 0;
+
+  case 1:
+    if (state == 0)
+    {
+      digitalWrite(5, 1);
+      delay(TURNOUT_SWITCH_PULSE);
+      digitalWrite(5, 0);
+    }
+    if (state == 1)
+    {
+      digitalWrite(6, 1);
+      delay(TURNOUT_SWITCH_PULSE);
+      digitalWrite(6, 0);
+    }
+    if (state == 0xFF)
+    {
+      report_turnout_state(ch);
+    }
+    return 0;
   }
   return -1;
 }
@@ -256,6 +275,10 @@ void setup()
   pinMode(3, OUTPUT);
   digitalWrite(3, LOW);
   pinMode(4, OUTPUT);
+  digitalWrite(4, LOW);
+  pinMode(5, OUTPUT);
+  digitalWrite(3, LOW);
+  pinMode(6, OUTPUT);
   digitalWrite(4, LOW);
 }
 
